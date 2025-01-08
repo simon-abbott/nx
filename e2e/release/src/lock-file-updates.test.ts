@@ -1,6 +1,8 @@
 import {
+  checkFilesExist,
   cleanupProject,
   newProject,
+  readJson,
   runCLI,
   runCommand,
   uniq,
@@ -152,6 +154,46 @@ describe('nx release lock file updates', () => {
       {project-name}/package.json
 
     `);
+  });
+
+  it('should not mess with peer dependencies when package manager is npm', async () => {
+    initializeProject('npm');
+
+    updateJson('package.json', (json) => {
+      json.workspaces = [pkg1, pkg2, pkg3];
+      return json;
+    });
+
+    updateJson(`${pkg1}/package.json`, (json) => {
+      json.peerDependencies = {
+        'semver': '^7.3.2',
+      };
+      return json;
+    });
+
+    runCommand(`npm install`);
+
+    expect(() => {
+      checkFilesExist(
+        'node_modules/semver/package.json',
+      );
+      runCommand('npm ci');
+    }).not.toThrow();
+
+    // workaround for NXC-143
+    runCLI('reset');
+
+    runCommand(`git add .`);
+    runCommand(`git commit -m "chore: initial commit"`);
+
+    runCLI(`release version 999.9.9`);
+
+    expect(() => {
+      runCommand('npm ci');
+      checkFilesExist(
+        'node_modules/semver/package.json',
+      );
+    }).not.toThrow();
   });
 
   it('should not update lock file when package manager is yarn classic', async () => {
